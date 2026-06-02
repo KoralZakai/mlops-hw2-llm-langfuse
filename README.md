@@ -141,6 +141,7 @@ There's an example launch script at `scripts/start_vllm.sh` to get you started -
 ### What you should have in the end:
 - vLLM serving Qwen3-30B-A3B at `http://localhost:8000`
 - A few manual queries returning sensible SQL
+- A screenshot of vLLM serving + one manual query returning SQL (`screenshots/vllm_manual_query.png`)
 - Your config flags + one-line justifications in `REPORT.md`
 
 ---
@@ -166,6 +167,7 @@ The starter dashboard at `infra/grafana/provisioning/dashboards/serving.json` gi
 ### What you should have in the end:
 - Grafana dashboard covering latency, throughput, KV cache
 - Every panel visibly reacts when you fire requests
+- A screenshot of the full dashboard with panels reacting to a burst of requests (`screenshots/grafana_serving.png`)
 - Dashboard JSON committed under `infra/grafana/provisioning/dashboards/`
 
 ---
@@ -279,8 +281,9 @@ result = graph.invoke(state,  config={"callbacks": [handler]})
 
 ### What you should have in the end:
 - Langfuse capturing traces from agent runs
-- One trace inspected showing the `generate_sql` / `verify` / (sometimes) `revise` waterfall
+- One trace inspected showing the `generate_sql` / `verify` / (sometimes) `revise` waterfall (`screenshots/langfuse_trace.png`)
 - Traces tagged with metadata you'll filter on in Phase 6
+- A screenshot of the trace list with your metadata tags visible (`screenshots/langfuse_tags.png`)
 
 ---
 
@@ -311,6 +314,7 @@ The eval signal is execution accuracy: run the agent's final SQL and the gold SQ
 ### What you should have in the end:
 - `evals/run_eval.py` working end-to-end
 - `results/eval_baseline.json` with overall + per-iteration pass rates
+- A screenshot of the Grafana dashboard while the baseline eval runs (`screenshots/grafana_eval_run.png`)
 - A read on whether the agent loop is doing real work
   
 
@@ -351,7 +355,7 @@ Watch the Grafana dashboard while it runs.
 
 ### What you should have in the end:
 - An iteration log in `REPORT.md` of the form *"saw X → hypothesized Y → changed Z → result was W"*
-- Grafana screenshots before/after each meaningful change
+- A before/after Grafana pair around the change that moved the needle (`screenshots/grafana_before.png`, `screenshots/grafana_after.png`)
 - `results/eval_after_tuning.json` showing whether quality survived
 - An honest verdict - SLO hit, or SLO missed with the gap quantified
 
@@ -389,14 +393,18 @@ By the end, your repo should contain:
 | `evals/run_eval.py` | Your eval runner |
 | `results/eval_baseline.json` | Baseline eval results |
 | `results/eval_after_tuning.json` | Post-tuning eval results |
-| `screenshots/grafana_serving.png` | The Grafana dashboard under load |
-| `screenshots/langfuse_trace.png` | A Langfuse trace showing a verify→revise loop |
+| `screenshots/vllm_manual_query.png` | vLLM serving + a manual query returning SQL (Phase 1) |
+| `screenshots/grafana_serving.png` | The full Grafana dashboard with panels reacting to load (Phase 2) |
+| `screenshots/langfuse_trace.png` | A Langfuse trace showing a verify→revise loop (Phase 4) |
+| `screenshots/langfuse_tags.png` | The Langfuse trace list with your metadata tags visible (Phase 4) |
+| `screenshots/grafana_eval_run.png` | The Grafana dashboard while the baseline eval runs (Phase 5) |
+| `screenshots/grafana_before.png`, `screenshots/grafana_after.png` | Before/after the tuning change that moved the needle (Phase 6) |
 
 ---
 
 ## Grading
 
-We grade the **reasoning, not the green checkmarks.** A missed SLO with a crisp, metric-grounded diagnosis scores higher than a hit SLO you can't explain. We read `REPORT.md` closely - that's where the thinking shows.
+We want to see your thoughts and reasoning process, not the green checkmarks. Showing where you got stuck is better than omitting mentions of these points. A missed SLO with a metric-grounded diagnosis is better than a hit SLO you can't explain.
 
 | Area | Weight | What a strong submission shows |
 |---|---|---|
