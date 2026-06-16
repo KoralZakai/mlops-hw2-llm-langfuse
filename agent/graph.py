@@ -16,8 +16,10 @@ conditional router following the same shape.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
+import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -26,7 +28,7 @@ from langgraph.graph import END, START, StateGraph
 
 from agent import prompts
 from agent.execution import ExecutionResult, execute_sql
-from agent.schema import render_schema
+from agent.schema import db_path, render_schema
 
 # Total generate + revise calls before the loop is forced to stop.
 # 3-5 is a reasonable range; tune it as part of Phase 3.
@@ -81,6 +83,28 @@ def _extract_sql(text: str) -> str:
     return (fenced.group(1) if fenced else text).strip()
 
 
+def _extract_json(text: str) -> dict:
+    """Pull the first JSON object out of an LLM reply, tolerating fences/prose.
+
+    The verifier is asked for a bare {"ok": ..., "issue": ...} object, but
+    models sometimes wrap it in ```json fences or add a sentence around it. We
+    grab the first balanced-looking {...} and parse it; on any failure we return
+    an empty dict so the caller can fall back to a safe default.
+    """
+    candidate = text.strip()
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", candidate, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        candidate = fenced.group(1).strip()
+    match = re.search(r"\{.*\}", candidate, re.DOTALL)
+    if not match:
+        return {}
+    try:
+        parsed = json.loads(match.group(0))
+        return parsed if isinstance(parsed, dict) else {}
+    except (json.JSONDecodeError, ValueError):
+        return {}
+
+
 def generate_sql_node(state: AgentState) -> dict:
     """Worked example - the other LLM nodes follow this same shape.
 
@@ -111,6 +135,62 @@ def execute_node(state: AgentState) -> dict:
     return {"execution": execute_sql(state.db_id, state.sql)}
 
 
+def _sample_rows(
+    db_id: str,
+    sql: str,
+    max_tables: int = 3,
+    n_rows: int = 3,
+    max_cols: int = 12,
+    max_cell: int = 40,
+) -> str:
+    """Real sample rows from the tables referenced by `sql`.
+
+    When a query returns 0 rows or errors, the usual cause is a literal that
+    doesn't match how the value is actually stored. Showing the model a few real
+    rows lets it align on the true value format (casing, '-', trailing '.0',
+    etc.) instead of guessing the same wrong literal again.
+
+    Bounded on purpose: BIRD has very wide tables (cards has ~60 columns), so we
+    cap columns per table and truncate long cells - an unbounded SELECT * blows
+    up the prompt and times the revise call out.
+    """
+    path = db_path(db_id)
+    low = sql.lower()
+    blocks: list[str] = []
+
+    def trim(c: object) -> str:
+        s = "" if c is None else str(c)
+        return s if len(s) <= max_cell else s[:max_cell] + "…"
+
+    try:
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as conn:
+            tables = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                )
+            ]
+            used = [t for t in tables if re.search(rf"\b{re.escape(t.lower())}\b", low)]
+            for t in used[:max_tables]:
+                try:
+                    cur = conn.execute(f'SELECT * FROM "{t}" LIMIT {n_rows}')
+                    cols = [d[0] for d in cur.description][:max_cols]
+                    rows = cur.fetchall()
+                except sqlite3.Error:
+                    continue
+                note = f" (first {max_cols} of {len(cur.description)} columns)" if len(cur.description) > max_cols else ""
+                lines = [", ".join(cols)]
+                for row in rows:
+                    lines.append(" | ".join(trim(c) for c in row[:max_cols]))
+                blocks.append(f"Sample rows from {t}{note}:\n" + "\n".join(lines))
+    except sqlite3.Error:
+        return ""
+    if not blocks:
+        return ""
+    return "\nActual sample data from the relevant tables (use it to match real value formats):\n" + "\n\n".join(blocks) + "\n"
+
+
 def verify_node(state: AgentState) -> dict:
     """Decide whether state.execution plausibly answers state.question.
 
@@ -124,7 +204,25 @@ def verify_node(state: AgentState) -> dict:
     What counts as "not plausible" is yours to define - see the Phase 3 targets
     in the README.
     """
-    raise NotImplementedError("Implement in Phase 3")
+    result = state.execution.render() if state.execution is not None else "ERROR: no execution result"
+    response = llm().invoke([
+        ("system", prompts.VERIFY_SYSTEM),
+        ("user", prompts.VERIFY_USER.format(
+            question=state.question,
+            sql=state.sql,
+            result=result,
+        )),
+    ])
+    verdict = _extract_json(response.content)
+    # Default to ok=True when we can't parse a verdict: a malformed verifier
+    # reply should not trap us in the revise loop until MAX_ITERATIONS.
+    ok = bool(verdict.get("ok", True))
+    issue = str(verdict.get("issue", "")) if not ok else ""
+    return {
+        "verify_ok": ok,
+        "verify_issue": issue,
+        "history": state.history + [{"node": "verify", "ok": ok, "issue": issue}],
+    }
 
 
 def revise_node(state: AgentState) -> dict:
@@ -137,7 +235,28 @@ def revise_node(state: AgentState) -> dict:
 
     Return: {"sql": <str>, "iteration": state.iteration + 1, ...}.
     """
-    raise NotImplementedError("Implement in Phase 3")
+    result = state.execution.render() if state.execution is not None else "ERROR: no execution result"
+    # When the prior attempt returned nothing or errored, the fix usually hinges
+    # on the real stored value format - feed the model actual sample rows.
+    needs_samples = state.execution is None or (not state.execution.ok) or state.execution.row_count == 0
+    samples = _sample_rows(state.db_id, state.sql) if needs_samples else ""
+    response = llm().invoke([
+        ("system", prompts.REVISE_SYSTEM),
+        ("user", prompts.REVISE_USER.format(
+            schema=state.schema,
+            question=state.question,
+            sql=state.sql,
+            result=result,
+            issue=state.verify_issue,
+            samples=samples,
+        )),
+    ])
+    sql = _extract_sql(response.content)
+    return {
+        "sql": sql,
+        "iteration": state.iteration + 1,
+        "history": state.history + [{"node": "revise", "sql": sql, "issue": state.verify_issue}],
+    }
 
 
 def route_after_verify(state: AgentState) -> str:
@@ -146,7 +265,11 @@ def route_after_verify(state: AgentState) -> str:
     Two reasons to end: the verifier was happy (state.verify_ok), or you've hit
     the iteration cap (state.iteration >= MAX_ITERATIONS). Otherwise, revise.
     """
-    raise NotImplementedError("Implement in Phase 3")
+    if state.verify_ok:
+        return "end"
+    if state.iteration >= MAX_ITERATIONS:
+        return "end"
+    return "revise"
 
 
 # ---- Graph wiring -----------------------------------------------------

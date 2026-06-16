@@ -17,6 +17,8 @@ data/bird/
 results/*.json
 screenshots/*.png
 screenshots/*.jpg
+evals/eval_set.jsonl
+load_test/perf_pool.jsonl
 
 # HF cache (if anyone runs locally)
 .cache/
@@ -28,3 +30,6 @@ screenshots/*.jpg
 
 # Lecture material (not part of the student repo)
 *.pdf
+
+# local scratch / helpers
+_*
