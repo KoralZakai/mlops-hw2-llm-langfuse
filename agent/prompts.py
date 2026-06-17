@@ -29,7 +29,16 @@ Rules:
   division. When it asks for "the most/least/highest", use ORDER BY ... LIMIT 1
   unless ties clearly matter.
 - Select only the columns the question asks for - do not add extra columns.
-- Return the statement inside a single ```sql ... ``` fenced block."""
+- Return the statement inside a single ```sql ... ``` fenced block.
+
+- When the question asks to LIST or show attribute values (names, coordinates,
+  ids, etc.) that can repeat across rows, use SELECT DISTINCT to avoid duplicate
+  rows that would not match a de-duplicated expected answer.
+- For text/string filters, match how the value is actually STORED: prefer a
+  case-insensitive match like LOWER(col) = LOWER('value'), and TRIM when the
+  stored form may have extra spacing.
+- Output ONLY the final, COMPLETE SQL statement in the fenced block - never a
+  partial fragment or a bare WHERE/clause; it must run on its own."""
 
 # Available placeholders: {schema}, {question}
 GENERATE_SQL_USER = """\
@@ -89,6 +98,11 @@ How to fix, by symptom:
   match (LOWER(col)=LOWER('x'), col LIKE 'x%', TRIM, or strftime on the stored
   format). RELAX the query - do NOT add LIMIT, extra filters, or extra joins
   that would shrink the result further.
+- When 0 rows, check EVERY WHERE condition against the sample rows, not just the
+  most obvious one. A wrong coded/enum value is a frequent culprit: gender stored
+  as 'M'/'F' (not 'male'/'m'), status or flags as single letters/codes, booleans
+  as 0/1 or 'Y'/'N'. Confirm each literal matches the real stored form before
+  concluding the filter is correct.
 - Errored: fix the specific syntax/column/table error using only schema names.
 - Wrong columns/shape: select exactly what the question asks, using columns as
   stored (separate name columns, not concatenated) and the right aggregate.

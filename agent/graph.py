@@ -32,7 +32,7 @@ from agent.schema import db_path, render_schema
 
 # Total generate + revise calls before the loop is forced to stop.
 # 3-5 is a reasonable range; tune it as part of Phase 3.
-MAX_ITERATIONS = 3
+MAX_ITERATIONS = 1
 
 VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
 VLLM_MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-30B-A3B-Instruct-2507")
@@ -204,6 +204,15 @@ def verify_node(state: AgentState) -> dict:
     What counts as "not plausible" is yours to define - see the Phase 3 targets
     in the README.
     """
+    # A verify verdict only matters if a revise can follow it. At the iteration
+    # cap, revise is unreachable (see route_after_verify), so the verify LLM call
+    # is pure wasted latency/throughput - skip it and pass the SQL through.
+    if state.iteration >= MAX_ITERATIONS:
+        return {
+            "verify_ok": True,
+            "verify_issue": "",
+            "history": state.history + [{"node": "verify", "ok": True, "issue": "skipped (at iteration cap)"}],
+        }
     result = state.execution.render() if state.execution is not None else "ERROR: no execution result"
     response = llm().invoke([
         ("system", prompts.VERIFY_SYSTEM),
