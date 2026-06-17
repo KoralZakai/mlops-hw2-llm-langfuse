@@ -109,6 +109,11 @@ async agent.
 
 ### Did quality survive the tuning?
 
+**Yes — fully.** Baseline (MAX_ITER=3) = **36.7% (11/30)**; after tuning (MAX_ITER=1, verify
+skipped) = **36.7% (11/30)**, 0 agent errors. Identical accuracy. The latency win (P95 86s →
+1.76s) cost **zero quality** — expected, since Phase 5 showed the revise loop was neutral and
+verify never changed the final SQL. (Old line for reference:)
+
 `results/eval_baseline.json` (~37%, MAX_ITER=3) vs `results/eval_after_tuning.json`
 (MAX_ITER=1): `__TBD__`%. Expected to hold ~37% since Phase 5 showed the loop is roughly
 neutral — removing it should not regress quality. `__confirm + one line__`.
