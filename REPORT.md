@@ -146,3 +146,14 @@ grounded directly in the eval's per-iteration numbers.
   domain knowledge the gold SQL encodes.
 - **A smarter/cheaper verify** that can flag plausible-but-wrong results (e.g. shape/cardinality
   checks against the question), so the loop targets the failure mode it currently misses.
+
+---
+
+## Artifacts note
+
+Included screenshots: `grafana_serving.png` (Phase 2), `langfuse_trace.png` + `langfuse_tags.png`
+(Phase 4), `grafana_eval_run.png` (Phase 5), `grafana_after.png` (Phase 6, post-tuning healthy
+state). Two screenshots were not captured before the H100 slot closed — `vllm_manual_query.png`
+(the manual SQL responses are quoted inline in §1/§3 and the agent's working SQL is in
+`results/*.json`) and `grafana_before.png` (the saturated baseline is documented numerically in
+§3: P95 86s, ~8.5 RPS sustained). All headline numbers come from the real Qwen3-30B on the H100.
