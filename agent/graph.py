@@ -31,8 +31,12 @@ from agent.execution import ExecutionResult, execute_sql
 from agent.schema import db_path, render_schema
 
 # Total generate + revise calls before the loop is forced to stop.
-# 3-5 is a reasonable range; tune it as part of Phase 3.
-MAX_ITERATIONS = 1
+# Tuned in Phase 6: 3 made the verify->revise loop the latency bottleneck (P95 86s)
+# while adding ~0 execution accuracy; 1 disabled the loop entirely. 2 keeps the loop
+# (one revise can fire, so it earns its Phase-3 keep) while bounding the tail. The
+# final verify is skipped at the cap (see verify_node), so a request is at most:
+# generate -> verify -> revise -> (verify skipped) = 3 LLM calls worst case.
+MAX_ITERATIONS = 2
 
 VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
 VLLM_MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-30B-A3B-Instruct-2507")
@@ -55,15 +59,18 @@ class AgentState:
     iteration: int = 0
     history: list[dict[str, Any]] = field(default_factory=list)
 
-
-def llm() -> ChatOpenAI:
-    """Chat client pointed at VLLM_BASE_URL (your local vLLM by default)."""
-    return ChatOpenAI(
-        model=VLLM_MODEL,
-        base_url=VLLM_BASE_URL,
-        api_key=LLM_API_KEY,
-        temperature=0.0,
-    )
+# Single shared chat client, reused across every call and request. Building a new
+# ChatOpenAI per call (the old `llm()` factory) churns a fresh HTTP connection pool
+# each time, which under concurrent load caused intermittent 500s and capped
+# throughput. timeout + max_retries make transient vLLM hiccups non-fatal.
+LLM = ChatOpenAI(
+    model=VLLM_MODEL,
+    base_url=VLLM_BASE_URL,
+    api_key=LLM_API_KEY,
+    temperature=0.0,
+    timeout=30,
+    max_retries=2,
+)
 
 
 # ---- Nodes ------------------------------------------------------------
@@ -115,7 +122,7 @@ def generate_sql_node(state: AgentState) -> dict:
     This node is wired and ready; fill in GENERATE_SQL_SYSTEM / GENERATE_SQL_USER
     in prompts.py to make it produce real queries.
     """
-    response = llm().invoke([
+    response = LLM.invoke([
         ("system", prompts.GENERATE_SQL_SYSTEM),
         ("user", prompts.GENERATE_SQL_USER.format(
             schema=state.schema,
@@ -214,7 +221,7 @@ def verify_node(state: AgentState) -> dict:
             "history": state.history + [{"node": "verify", "ok": True, "issue": "skipped (at iteration cap)"}],
         }
     result = state.execution.render() if state.execution is not None else "ERROR: no execution result"
-    response = llm().invoke([
+    response = LLM.invoke([
         ("system", prompts.VERIFY_SYSTEM),
         ("user", prompts.VERIFY_USER.format(
             question=state.question,
@@ -249,7 +256,7 @@ def revise_node(state: AgentState) -> dict:
     # on the real stored value format - feed the model actual sample rows.
     needs_samples = state.execution is None or (not state.execution.ok) or state.execution.row_count == 0
     samples = _sample_rows(state.db_id, state.sql) if needs_samples else ""
-    response = llm().invoke([
+    response = LLM.invoke([
         ("system", prompts.REVISE_SYSTEM),
         ("user", prompts.REVISE_USER.format(
             schema=state.schema,
