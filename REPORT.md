@@ -103,13 +103,34 @@ and amplified offered load 2–3×, producing the latency tail (visible already 
 
 2. **saw** the tail (P99 33s @ RPS 2, `latency_max` ≈ the 120s timeout) → **hypothesized** the
    `timeout=30, max_retries=2` client is retrying slow calls and amplifying load → **changed**
-   `agent/graph.py` `max_retries=2 → 0` (does not touch the revise loop — that is `MAX_ITERATIONS`)
-   → **result:** _**‹post-fix P95/P99 from `results/load_test_after.json`›**_.
+   `agent/graph.py` `max_retries=2 → 0` (does not touch the revise loop — that is `MAX_ITERATIONS`).
 
 3. **saw** the single-process sync agent caps in-flight requests at ~40 threads, starving vLLM's
    95% headroom → **changed** restarted the agent with `uvicorn --workers 8` (~320 concurrent
-   capacity) to feed vLLM's spare capacity → **result:** _**‹running-seqs / P95 change from the
-   after run + `grafana_after.png`›**_.
+   capacity) to feed vLLM's spare capacity.
+
+   **Combined result of #2 + #3** (`results/load_test_after.json`, RPS 10, full 5-min run): the
+   system recovered from total collapse — **ok rate 25% → 98.6%** (2957/3000), **P50 65s → 2.5s**
+   (26×), **P95 110s → 17.3s** (6.4×), **P99 117s → 49.9s**, timeouts 1295 → 4. The diagnosis is
+   confirmed: repairing the *application tier* alone, with the serving config untouched, fixed the
+   collapse — the bottleneck was never the model server.
+
+### Final numbers and verdict
+
+| Metric | Baseline (before) | After (`max_retries=0` + `--workers 8`) | SLO |
+|---|---|---|---|
+| P50 | 65s | **2.5s** | — |
+| P95 | 110s | **17.3s** | < 5s |
+| P99 | 117s | 49.9s | — |
+| ok rate | 25% | **98.6%** | — |
+
+**Verdict: SLO not fully met, but the system went from unusable to reliable.** P95 17.3s still
+exceeds the 5s target, but P50 (2.5s) is already half the latency budget — the residual is a
+**tail**, not a throughput wall: at sustained 10 RPS the agent's inherent 2–3 chained vLLM calls
+(3 for revise-loop requests) still queue intermittently. Closing the last gap needs either a
+**lower offered RPS** (the supportable P95<5s point) or an **async / fewer-call agent** (see §5),
+not more GPU — vLLM still had 95% headroom. The honest reportable result for one H100 with this
+agent is: **reliably serves ~10 RPS at 98.6% success, P50 2.5s; P95 SLO holds only below 10 RPS.**
 
 ### Honest finding — why hosted numbers are not the SLO
 
@@ -121,10 +142,6 @@ on the real serving infrastructure — a hosted API hides the capacity limit the
 expose.** A 2–3-call agent at 10 RPS (≈25 dependent vLLM calls/s) is a heavy ask for one H100; the
 realistic engineering levers were app-tier concurrency and killing the retry amplification, not the
 model server.
-
-> **Final post-fix numbers:** fill from `results/load_test_after.json` once the `max_retries=0` +
-> `--workers 8` run is confirmed. If the residual gap remains, the supportable rate (the RPS at
-> which P95 < 5s) is the honest reported SLO point for a single H100.
 
 ---
 
