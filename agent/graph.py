@@ -69,7 +69,12 @@ LLM = ChatOpenAI(
     api_key=LLM_API_KEY,
     temperature=0.0,
     timeout=30,
-    max_retries=2,
+    # Phase 6: was 2. Under load, a slow call hit the 30s timeout and retried,
+    # amplifying offered load 2-3x and exploding the latency tail (p95 11.8s @
+    # 2 RPS, p95 110s @ 10 RPS). vLLM was near-idle (KV ~5%, 0 preemptions), so
+    # the bottleneck was the retry storm + single-process agent concurrency, not
+    # the model. 0 retries removes the amplification; --workers scales the agent.
+    max_retries=0,
 )
 
 
