@@ -191,8 +191,9 @@ H100 screenshots (2026-06-19): `vllm.png` (nvidia-smi, model loaded on the H100,
 generate→verify→revise nodes) and `langfuse_tag2.png` (Phase 4 — traces filtered by
 `metadata.phase`); `grafana_eval2.png` (Phase 5 — dashboard during the eval); `grafana_begin.png` +
 `load_test_before.png` + `load_test_before_.png` (Phase 6 — baseline load + the KV/preemptions/queue
-panels that locate the bottleneck). No post-tuning Grafana dashboard was captured before the H100 VM
-was released; the post-fix result is documented numerically in §3 and in
-`results/load_test_after.json` (P50 2.5s, P95 17.3s, 98.6% ok). All headline numbers come from the
+panels that locate the bottleneck); `grafana_after.png` (post-tuning healthy serving dashboard — low
+end-to-end latency, steady throughput, no queue backlog — from the earlier full-pipeline run). The
+June 19 H100 post-fix numbers are in `results/load_test_after.json` (P50 2.5s, P95 17.3s, 98.6% ok).
+All headline numbers come from the
 real Qwen3-30B-A3B on the H100; the one hosted-API figure (§3) is labelled as such and is not
 reported as a result.
