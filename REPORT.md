@@ -177,6 +177,15 @@ shape, wrong values) that `verify` cannot detect from a preview.
 
 ## Artifacts note
 
+**Data provenance note.** The H100 result files (`results/eval_h100_1/2/3.json`,
+`results/load_test_before.json`, `results/load_test_rps2.json`, `results/load_test_after.json`)
+contain the **verbatim run summaries** from the 2026-06-19 H100 session; their per-question /
+per-request detail arrays were lost when the GPU VM was released before `results/` was copied off
+the box, so those arrays are empty (each file carries a `_note` saying so). Every headline number in
+this report is from those real summaries. Older `results/*.json` files (`eval_baseline`,
+`eval_after_tuning`, `load_test`, etc.) are local-development runs against a hosted API and are not
+reported as results.
+
 H100 screenshots (2026-06-19): `vllm.png` (nvidia-smi, model loaded on the H100, Phase 1);
 `grafana_serving.png` (Phase 2 dashboard); `langfuse_tags_.png` (Phase 4 — full agent trace with
 generate→verify→revise nodes) and `langfuse_tag2.png` (Phase 4 — traces filtered by

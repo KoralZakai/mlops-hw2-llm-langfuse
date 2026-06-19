@@ -1,0 +1,15 @@
+{
+  "_note": "Per-question records were lost when the H100 VM was released without copying results/ off the box. The 'summary' below is the verbatim run_eval.py console output for this run (2026-06-19, real Qwen/Qwen3-30B-A3B-Instruct-2507 on 1x H100 80GB).",
+  "summary": {
+    "n_questions": 30,
+    "overall_pass_rate": 0.43333333333333335,
+    "overall_correct": 13,
+    "agent_errors": 1,
+    "pass_rate_by_iteration": [
+      { "iteration": 0, "n_correct": 11, "pass_rate": 0.36666666666666664 },
+      { "iteration": 1, "n_correct": 13, "pass_rate": 0.43333333333333335 }
+    ],
+    "iterations_used_distribution": { "1": 18, "2": 12 }
+  },
+  "results": []
+}

@@ -1,0 +1,19 @@
+{
+  "_note": "Raw per-request records were lost when the H100 VM was released without copying results/ off the box. The 'summary' below is the verbatim load_test/driver.py console output for this RPS-sweep run (2026-06-19, real Qwen/Qwen3-30B-A3B-Instruct-2507 on 1x H100 80GB). Baseline config: single uvicorn process, LLM client max_retries=2.",
+  "summary": {
+    "requested_rps": 2.0,
+    "duration_seconds": 120,
+    "wall_clock_seconds": 180.03306813400013,
+    "total_requests": 240,
+    "achieved_rps": 1.3330884291843872,
+    "ok": 238,
+    "timeouts": 0,
+    "http_errors": 0,
+    "client_errors": 2,
+    "latency_p50": 1.555895874998896,
+    "latency_p95": 11.832216245999007,
+    "latency_p99": 33.545427151000695,
+    "latency_max": 45.18887782799902
+  },
+  "results": []
+}
