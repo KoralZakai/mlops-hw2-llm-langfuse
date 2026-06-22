@@ -94,6 +94,24 @@ queue built and latency grew to the driver's 120s timeout (`latency_max = 119s`)
 **retry storm** — the shared LLM client used `timeout=30, max_retries=2`, so any slow call retried
 and amplified offered load 2–3×, producing the latency tail (visible already at RPS 2: P99 33s).
 
+### What changed between *before* and *after* (and what did **not**)
+
+**The vLLM serving flags did not change.** The §1 config — `--max-num-seqs 128`,
+`--gpu-memory-utilization 0.92`, `--max-model-len 4096`, `--kv-cache-dtype fp8`,
+`--enable-prefix-caching`, `--enable-chunked-prefill`, no tensor-parallel (single H100) — was
+**identical** in both runs. The diagnosis above is *why*: vLLM sat ~95% idle (KV ~5%, 0
+preemptions), so tuning serving flags was not the lever. Both changes were **application-tier**:
+
+| Setting | Where | Before | After |
+|---|---|---|---|
+| `max_retries` (LLM HTTP client) | `agent/graph.py` | 2 | **0** |
+| agent process count | launch cmd | 1 (`uvicorn`) | **8** (`uvicorn --workers 8`) |
+
+> **Not to be confused:** `max_retries` is the LLM **HTTP client's network-retry** count (how many
+> times a *failed/timed-out call to vLLM* is re-sent) — it is **not** the revise loop. The
+> verify→revise loop is `MAX_ITERATIONS`, which is **unchanged at 2** (generate + one revise) and
+> still fires on 10–12/30 questions (§2/§4). The Phase 3 loop was never disabled.
+
 ### Iteration log — *saw X → hypothesized Y → changed Z → result W*
 
 1. **saw** p95 110s @ 10 RPS while Grafana showed vLLM idle (KV ~5%, 0 preemptions, running ~40)
