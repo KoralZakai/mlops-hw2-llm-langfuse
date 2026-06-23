@@ -204,10 +204,10 @@ this report is from those real summaries. Older `results/*.json` files (`eval_ba
 `eval_after_tuning`, `load_test`, etc.) are local-development runs against a hosted API and are not
 reported as results.
 
-H100 screenshots (2026-06-19): `vllm.png` (nvidia-smi, model loaded on the H100, Phase 1);
-`grafana_serving.png` (Phase 2 dashboard); `langfuse_tags_.png` (Phase 4 — full agent trace with
-generate→verify→revise nodes) and `langfuse_tag2.png` (Phase 4 — traces filtered by
-`metadata.phase`); `grafana_eval2.png` (Phase 5 — dashboard during the eval); `grafana_begin.png` +
+H100 screenshots (2026-06-19): `vllm_manual_query.png` (vLLM serving on the H100 + a manual query returning SQL, Phase 1; `vllm.png` is the companion nvidia-smi showing the model loaded);
+`grafana_serving.png` (Phase 2 dashboard); `langfuse_trace.png` (Phase 4 — full agent trace with
+generate→verify→revise nodes) and `langfuse_tags.png` (Phase 4 — traces filtered by
+`metadata.phase`); `grafana_eval_run.png` (Phase 5 — dashboard during the eval); `grafana_before.png` +
 `load_test_before.png` + `load_test_before_.png` (Phase 6 — baseline load + the KV/preemptions/queue
 panels that locate the bottleneck); `grafana_after.png` (post-tuning healthy serving dashboard — low
 end-to-end latency, steady throughput, no queue backlog — from the earlier full-pipeline run). The
